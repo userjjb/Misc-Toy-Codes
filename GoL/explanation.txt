@@ -1,0 +1,27 @@
+Someone asked about cellular automata on /r/matlab. I've been wanting to implement Conway's Game of Life in Matlab for some time now since I though it could be made quite compact; I was right.
+
+Reddit thread: https://www.reddit.com/r/matlab/comments/3zejxz/cellular_automata/
+
+Thread explanation:
+Here's a small elegant solution:
+ L= 800;                              %Domain side (L)ength
+ S= round(rand(L));                   %(S)tate matrix
+ A= toeplitz([[1 1] zeros(1,L-2)]);   %(A)djacency matrix
+
+ for it=1:300                         %Time limit
+     S= min(1,max(0,S+ 1-mod(A*S*A +4,7)));    %Magic
+ end
+Change L and the loop length to whatever you want; you'll also need to initialize S with your desired initial state (I just used noise for testing). That is the easy to understand version, see the better version below.
+Although it is short, there is a lot going on here. There are two main pieces to this, the adjacency matrix and the "Game of Life" rules:
+The adjacency matrix A, is what's called a Toeplitz matrix since we are on a rectangular grid. This describes the neighbors for each cell. When we multiply the state S by A (S*A) we get a matrix the same size as S; each entry in the result is the sum of that cell location in S and it's horizontal neighbors. When we multiply that by A again (A*S*A) the result in an element is the sum of the corresponding element from S*A and it's vertical neighbors. Since the S*A element and it's vertical neighbors already include their respective horizontal neighbors, an element in A*S*A is then the total sum of all neighbors of the respective cell in S (and itself).
+The Game of Life rules can be said succinctly: if the total sum of a cell and it's neighbors is 3 then it's alive (1), if the sum is 4 then it's state shouldn't change, for all other sums it should die (0). We can quickly calculate the total change in state (avoiding slow branching ifs() ) through clever use of mod() and the properties of addition:
+If we want a cell to be alive, then we shall add 1 to it's state; if it was already alive the state value will be 2 which is still logically "true".
+If we want a cell to die, then we shall subtract 1 from it's state; if it was already dead then the state value will be -1, but we will later take the max(0,S) of the state which will change this to 0 and therefore dead.
+If we don't want to change the cell's state, then we shall add 0 to it.
+We are left with now converting the neighbor count values to state changes:
+0,1,2,5,6,7,8,9 -> -1 (die)
+3 -> +1 (live)
+4 -> 0 (unchanged)
+This is calculated with 1-mod(STATE_VALUE+4, 7). These aren't magic numbers: it must be mod a value three more than the live state value (so that the 1-live state+4 mod 7 is one), the mod() must also not wrap for state values as large as 9. mod 7 won't wrap until 14, 13-9=4 which is 3 less than 7. This might be confusing, to prove it to yourself try using lower mod numbers for a state value of 9 and see what happens.
+Finally we apply a max() and min() to bound any cells that were given life that were already alive and vice versa.
+The game rules and adjacency matrix are easily changeable for other possible choices, let me know if you have any questions.

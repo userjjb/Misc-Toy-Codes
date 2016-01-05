@@ -1,0 +1,10 @@
+This was an altruistic re-write for someone on /r/matlab. I'm quite pleased with how condensed the vectorized code is compared to the brute-force approach taken by the original poster.
+
+THread here: https://www.reddit.com/r/matlab/comments/3veu50/need_help_vectorizing_code/
+
+My explanation from the thread:
+This accepts an arbitrary number of elements as well as an arbitrary number of phase levels.
+I assumed that when you have more than 2 phase levels a particular entry in the vector has the same form as the code you gave, just with the additional permutations. So if you were to have three phase levels with 4 elements, some possible entries in the vector could be: AF1111, AF1113, AF1213, etc. In that case there would be 81 entries in the vector. If this not a correct assumption then you would need to provide the formula or algorithm that is used for calculating entries with greater than 2 phase levels.
+ST and Nphase are just convenient intermediate variables to make the calculation more readable. Ind is a matrix of indexes of all the possible permutations for the chosen combination of phase levels and number of elements; Each row in Ind is a possible permutation. Ind is a neat little way to quickly and generally calculate all your index permutations, don't worry if you don't understand it.
+We use bsxfun() to calculate AF, if you haven't heard of this yet you should read up on it; it is very useful for vectorization (it's built into Matlab).
+Since you do the same set of operations to each permutation all we do is construct all permutations with phase_rad(Ind). Next we add Q * pi * sin(theta_deg * pi/180) to each row, where Q increases columnwise from 0 to N-1; this is done with bsxfun() by adding this single row vector and expanding it for all row permutations. Everything is then multiplied by 1i, exp() is applied, and then all terms in the permutation are added (row-wise) with sum(<row>,2). The permute() is just to rotate the vector result into a row like you have it.
