@@ -102,7 +102,7 @@ for n= 1:numel(shapes)
     end
     if or(n==1,n==6); temp=temp(:,:,1:pos); end %The first piece does not need to be rotated, since the second piece that it is combined with already has been. Piece 6 is symmetrical
     perms{n}= temp;
-    if n~=6; perms{n}(:,:,end+1:end+size(temp,3))= reshape(flipud(reshape(temp,L,[])),L,L,[]); end %Also account for the piece being flipped over, 6 is symmetric
+    %if n~=6; perms{n}(:,:,end+1:end+size(temp,3))= reshape(flipud(reshape(temp,L,[])),L,L,[]); end %Also account for the piece being flipped over, 6 is symmetric
 end
 
 for n=1:numel(perms); perms{n}= int8(perms{n}); end
@@ -126,7 +126,7 @@ r= ind(ind2)-(c-1)*size(perms{1},3);
 pat= perms{1}(:,:,r)+2*perms{2}(:,:,c);
 %used{1}=r; used{2}=c;
 
-mem_limit= 4e9; %This is the max size of "over" so that find() doesn't fail (on 16Gb systems), if it is we should split the generating perms{n} into pieces
+mem_limit= 3e9; %This is the max size of "over" so that find() doesn't fail (on 16Gb systems), if it is we should split the generating perms{n} into pieces
 for n= 3:numel(perms)
     splitB= round(linspace(1,size(over,4),1+ceil((size(perms{n},3)*size(over,4)*L^2)/mem_limit)));
         splitB= splitB(2:end);

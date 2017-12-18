@@ -1,0 +1,283 @@
+JOSH NOTE: Looks like originally based on drw25's code, and then tweaked by FlyingVictory
+
+function b = chain(c,n)
+
+% 2D chain folding for St Andrews competition
+%
+% This is the "lowest penalty search" algorithm, but realigning the grid
+% on the centre of mass every step, which makes the penalty function on
+% each iteration as close to the final one as possible.
+%
+% Because it's slow, can no longer brute force the pivot - search for
+% likely candidates by window function on link mass instead as before.
+%
+% Speedup gives time to try a few more pivots and one more angle
+%
+% Daniel Warren
+% February 2017
+
+% Initialize penalty grid (ndgrid is slow, so only do once)
+[i j] = ndgrid(1:n,1:n);
+ci = round(n/2);
+cj = round(n/2);
+pgrid = ((i-ci).^2+(j-cj).^2); % used to calculate score later
+
+window = 11; % size of window to sum masses for optimum pivot
+npivots = round(numel(c)/4); % number of pivots to try
+
+npivots(npivots>numel(c)) = numel(c);
+
+% score potential of each pivot by summing mass * ramped weighting function
+% in each window
+ramp = round(window/2)-abs(mean(1:window)-(1:window)); % linear ramp around centre
+pivscore = conv(c,ramp,'same');
+
+[~,pivots] = sort(pivscore,'descend');
+pivots = pivots(1:npivots);
+
+ltinit = [0 0 1 2];% Also try different angular separations for the arms (as SS8GEv03)
+utinit = [0 2 3 1];% 
+
+score = Inf(numel(pivots),numel(ltinit));
+b = cell(numel(pivots),numel(ltinit));
+
+for p = 1:numel(pivots)
+    for ang = 1:numel(ltinit)
+        b{p,ang} = chain_single(c,n,pivots(p),ltinit(ang),utinit(ang),pgrid,i,j);
+        if isempty(b{p,ang})
+            score(p,ang) = Inf;
+        else
+            b{p,ang} = align_com(b{p,ang},c,i,j);
+            score(p,ang) = calculate_score(b{p,ang},c,pgrid);
+        end
+    end
+end
+
+if all(~isfinite(score(:)))
+
+    % This condition occurs if the wrap fails. In this case, revert to a
+    % simple snake in smallest possible square
+    
+    nmin = ceil(sqrt(numel(c)));
+    
+    b = zeros(nmin);
+    b(1:numel(c)) = 1:numel(c);
+    b(:,2:2:end) = flipud(b(:,2:2:end));
+    b((end+1):n,(end+1):n) = 0;
+    b = align_com(b,c,i,j);
+    
+else
+    
+    % Choose the matrix with the best score
+    
+    b = b(:);
+    [~,order] = sort(score(:));
+    b = b{order(1)};
+       
+end
+
+
+
+end
+
+function [b oi oj] = align_com(b,c,i,j)
+
+% Move centre of mass as central as possible, i+j passed because ndgrid is
+% slow
+
+bmask = b~=0;
+
+c(end+1) = 0;
+b2 = b;
+b2(~bmask) = numel(c);
+
+c = c(b2);
+c = c(:);
+
+mass = sum(c);
+
+if mass == 0
+    oi = 0;
+    oj = 0;
+    return;
+end
+
+ci = (size(b,1)/2);
+cj = (size(b,2)/2);
+
+comi = sum(c.*i(:))/mass;
+comj = sum(c.*j(:))/mass;
+    
+oi = ceil(ci-comi);
+oj = ceil(cj-comj);
+    
+i0 = i(bmask);
+i1 = i0(end);
+i0 = i0(1);
+j0 = j(bmask)';
+j1 = j0(end);
+j0 = j0(1);
+    
+oi((i1+oi) > size(b,1)) = size(b,1)-i1;
+oi((i0+oi) < 1) = 1-i0;
+oj((j1+oj) > size(b,2)) = size(b,2)-j1;
+oj((j0+oj) < 1) = 1-j0;
+    
+b=circshift(b,[oi,oj]);
+
+end
+
+function score = calculate_score(b,c,pgrid)
+
+% Calculate estimated score
+
+c(end+1) = 0;
+b(b==0) = numel(c);
+
+score = sum(sum(c(b).*pgrid));
+
+end
+
+function b = chain_single(c,n,pivot,ltinit,utinit,pgrid,igrid,jgrid)
+
+% This will wrap up a chain in a constant direction of rotation around a
+% given pivot.
+%
+% Daniel Warren
+% February 2017
+
+b = zeros(n);
+
+ci = round(n/2);
+cj = round(n/2);
+
+b(ci,cj) = pivot;   % place in centre of box
+
+l = pivot;        % initialize indices for lower part of chain
+li = ci;            % (link number, position i-j and direction phase t)
+lj = cj;
+lt = ltinit;
+
+u = pivot;        % ...and upper part of chain
+ui = ci;
+uj = cj;
+ut = utinit;
+
+slotscore = Inf(1,4);
+slotli = Inf(1,4);
+slotlj = Inf(1,4);
+slotui = Inf(1,4);
+slotuj = Inf(1,4);
+
+while l > 1 || u < numel(c)
+    % Wrap chain up by alternately adding elements either side of the
+    % pivot, first seeking the lowest penalty unoccupied slot and then
+    % cycling through directions in a clockwise (or anti-clockwise
+    % depending on how you think of the matrix coord system...) manner.
+    
+    if l > 1
+        l = l-1;
+        lt = mod(lt+1,4);
+        
+        slotscore(:) = Inf;
+        slotli(:) = Inf;
+        slotlj(:) = Inf;
+        for i = 1:4
+            switch i
+                case 1
+                    slotli(i) = li;
+                    slotlj(i) = lj+1;
+                case 2
+                    slotli(i) = li-1;
+                    slotlj(i) = lj;
+                case 3
+                    slotli(i) = li;
+                    slotlj(i) = lj-1;
+                case 4
+                    slotli(i) = li+1;
+                    slotlj(i) = lj;
+            end
+            if (slotli(i) >= 1 && slotli(i) <= n && slotlj(i) >= 1 && slotlj(i) <= n) ...
+                    && b(slotli(i),slotlj(i)) == 0
+                slotscore(i) = pgrid(slotli(i),slotlj(i))-pgrid(li,lj);
+            end
+        end
+        
+        if ~any(isfinite(slotscore))
+            % Wrapping failed with this pivot - return empty
+            b = [];
+            return;
+        end
+        
+        [minscore,bestslot] = min(slotscore);
+        
+        if slotscore(1+lt) == minscore
+            li = slotli(1+lt);
+            lj = slotlj(1+lt);
+        else
+            li = slotli(bestslot);
+            lj = slotlj(bestslot);
+        end
+        b(li,lj) = l;
+%         [b oi oj] = align_com(b,c,igrid,jgrid);
+%         li = li+oi;
+%         lj = lj+oj;
+%         ui = ui+oi;
+%         uj = uj+oj; % can't afford the time for this
+    end
+    
+    if u < numel(c)
+        u = u+1;
+        ut = mod(ut+1,4);
+        
+        slotscore(:) = Inf;
+        slotui(:) = Inf;
+        slotuj(:) = Inf;
+        for i = 1:4
+            switch i
+                case 1
+                    slotui(i) = ui;
+                    slotuj(i) = uj+1;
+                case 2
+                    slotui(i) = ui-1;
+                    slotuj(i) = uj;
+                case 3
+                    slotui(i) = ui;
+                    slotuj(i) = uj-1;
+                case 4
+                    slotui(i) = ui+1;
+                    slotuj(i) = uj;
+            end
+            if (slotui(i) >= 1 && slotui(i) <= n && slotuj(i) >= 1 && slotuj(i) <= n) ...
+                    && b(slotui(i),slotuj(i)) == 0
+                slotscore(i) = pgrid(slotui(i),slotuj(i))-pgrid(ui,uj);
+            end
+        end
+        
+        if ~any(isfinite(slotscore))
+            % Wrapping failed with this pivot - return empty
+            b = [];
+            return;
+        end
+        
+        [minscore,bestslot] = min(slotscore);
+        
+        if slotscore(1+ut) == minscore
+            ui = slotui(1+ut);
+            uj = slotuj(1+ut);
+        else
+            ui = slotui(bestslot);
+            uj = slotuj(bestslot);
+        end
+        b(ui,uj) = u;
+        
+        [b oi oj] = align_com(b,c,igrid,jgrid);
+        li = li+oi;
+        lj = lj+oj;
+        ui = ui+oi;
+        uj = uj+oj;
+        
+    end
+end
+    
+end
