@@ -84,7 +84,7 @@ end subroutine update_fen
 ! parent array. Naive updates would then have a O(M log N) cost for tree
 ! size N and M updates. Instead we can break these updates into two
 ! regions: inside the contiguous chunk and everything after. As a result
-! we have reduced the cost to O(log N + log M). For "large" M and N>>M
+! we have reduced the cost to O(log N + M log M). For "large" M and N>>M
 ! this can translate to a significant savings, but even for M=2 or 3 it
 ! is still faster than 2 or 3 naive sequential updates.
 pure subroutine update_fen_chunk(tree, delta, upd_index)
