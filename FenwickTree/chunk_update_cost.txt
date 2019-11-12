@@ -1,0 +1,33 @@
+A simple cost scaling study for fenwick tree chunk updates. I expected the cost of the update inside the chunk region should be O(M log M) for a chunk size M.
+This program computes the actual cost for chunk sizes 1 through 64 (cost is *per* chunk entry, so total cost is output*M)
+
+program hello
+    integer, parameter :: fen_size=500
+    integer, dimension(fen_size) :: fen
+    integer i,j,k
+    character(len=6) :: fmt = '(50I4)'
+    character(len=8) :: fmt2 = '(32F7.3)'
+    
+    real, dimension(64) :: saved
+    do chunk=1,64
+        fen = 0
+        do i=1,fen_size-chunk
+            do j=1,chunk
+                k=i+j-1
+                do while (k<i+chunk)
+                    fen(i) = fen(i) + 1
+                    k = k + iand(k,-k)
+                end do
+            end do
+        end do
+        saved(chunk) = 1.0*sum(fen(1:fen_size-chunk))/(1.0*(fen_size-chunk)*chunk)
+    end do
+    write(*,fmt2) saved
+end program hello
+
+Program output:
+1.000  1.250  1.416  1.562  1.675  1.771  1.858  1.939  2.008  2.069  2.126  2.178  2.227  2.274  2.319  2.362  2.401  2.437  2.471  2.503  2.534  2.564  2.592  2.620  2.647  2.673  2.698  2.723  2.747  2.771  2.794  2.817
+  2.838  2.858  2.877  2.895  2.913  2.931  2.948  2.965  2.981  2.997  3.013  3.028  3.043  3.058  3.073  3.087  3.101  3.114  3.127  3.140  3.153  3.166  3.179  3.192  3.204  3.217  3.229  3.242  3.254  3.267  3.279  3.291
+
+Stick this in a LSQ non-linear solver, fitting with the function A + B*ln(M) yields a quite good fit for A,B ~= 0.63, i.e. 0.63(1+ln(M))
+Therefore empirically it seems safe to declare the cost scaling as O(M log M). This makes theoretical sense as well, a chunk of size M should on average span log M tree levels and each entry in the chunk will access log M tree entries.
